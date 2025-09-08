@@ -1,0 +1,356 @@
+name: media-stack
+
+# ============================================================================
+# NETWORKS - Isolated networks for security
+# ============================================================================
+networks:
+  vpn_torrents:
+    name: vpn_torrents
+    driver: bridge
+    
+  vpn_slskd:
+    name: vpn_slskd
+    driver: bridge
+    
+  media_network:
+    name: media_network
+    driver: bridge
+    
+  frontend:
+    name: frontend
+    driver: bridge
+
+# ============================================================================
+# VOLUMES - Centralized volume definitions
+# ============================================================================
+volumes:
+  vpn_sync:
+    name: vpn_sync
+    driver: local
+
+# ============================================================================
+# YAML ANCHORS - Reusable configurations to reduce redundancy
+# ============================================================================
+x-common-env: &common-env
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  TZ: ${TZ:-Etc/UTC}
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+x-arr-base: &arr-base
+  <<: *restart-policy
+  platform: linux/amd64
+  networks:
+    - media_network
+    - frontend
+  environment:
+    <<: *common-env
+  healthcheck:
+    test: ["CMD", "wget", "--spider", "-q", "http://localhost:${INTERNAL_PORT:-8080}"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 40s
+
+x-gluetun-base: &gluetun-base
+  <<: *restart-policy
+  image: qmcgaw/gluetun:latest
+  cap_add:
+    - NET_ADMIN
+  devices:
+    - /dev/net/tun:/dev/net/tun
+  environment:
+    <<: *common-env
+    VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER}
+    VPN_TYPE: ${VPN_TYPE}
+    SERVER_COUNTRIES: ${SERVER_COUNTRIES}
+    PORT_FORWARD_ONLY: ${PORT_FORWARD_ONLY:-on}
+    VPN_PORT_FORWARDING: ${VPN_PORT_FORWARDING:-on}
+  healthcheck:
+    test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+
+# ============================================================================
+# SERVICES
+# ============================================================================
+services:
+  # --------------------------------------------------------------------------
+  # INITIALIZATION
+  # --------------------------------------------------------------------------
+  init-permissions:
+    image: alpine:latest
+    container_name: init-permissions
+    user: root
+    command: |
+      sh -c "
+        echo '🔧 Setting permissions for shared volumes...'
+        chown -R ${PUID:-1000}:${PGID:-1000} /vpn-sync
+        echo '✅ Permissions set successfully'
+      "
+    volumes:
+      - vpn_sync:/vpn-sync
+    restart: "no"
+
+  # --------------------------------------------------------------------------
+  # VPN GATEWAYS (Gluetun)
+  # --------------------------------------------------------------------------
+  vpn-torrents:
+    <<: *gluetun-base
+    container_name: vpn-torrents
+    environment:
+      <<: *common-env
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER}
+      VPN_TYPE: ${VPN_TYPE}
+      WIREGUARD_PRIVATE_KEY: ${TORRENT_WIREGUARD_PRIVATE_KEY}
+      SERVER_COUNTRIES: ${SERVER_COUNTRIES}
+      PORT_FORWARD_ONLY: ${PORT_FORWARD_ONLY:-on}
+      VPN_PORT_FORWARDING: ${VPN_PORT_FORWARDING:-on}
+      VPN_PORT_FORWARDING_STATUS_FILE: /tmp/qbit_port
+      FIREWALL_VPN_INPUT_PORTS: ${QBITTORRENT_WEBUI_PORT:-8080}
+      # Auto-update qBittorrent port via API
+      VPN_PORT_FORWARDING_UP_COMMAND: |
+        /bin/sh -c 'wget -qO- --retry-connrefused \
+        --post-data "json={\"listen_port\":{{PORTS}}}" \
+        http://127.0.0.1:${QBITTORRENT_WEBUI_PORT:-8080}/api/v2/app/setPreferences'
+    volumes:
+      - ${DATA_ROOT}/config/vpn-torrents:/gluetun
+    ports:
+      - "${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}"
+      - "${GLUETUN_TORRENTS_API_PORT:-8000}:8000"
+    networks:
+      - vpn_torrents
+      - frontend
+
+  vpn-slskd:
+    <<: *gluetun-base
+    container_name: vpn-slskd
+    environment:
+      <<: *common-env
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER}
+      VPN_TYPE: ${VPN_TYPE}
+      WIREGUARD_PRIVATE_KEY: ${SLSKD_WIREGUARD_PRIVATE_KEY}
+      SERVER_COUNTRIES: ${SERVER_COUNTRIES}
+      PORT_FORWARD_ONLY: ${PORT_FORWARD_ONLY:-on}
+      VPN_PORT_FORWARDING: ${VPN_PORT_FORWARDING:-on}
+      VPN_PORT_FORWARDING_STATUS_FILE: /vpn-sync/forwarded_port
+      FIREWALL_VPN_INPUT_PORTS: ${SLSKD_PORT:-8585}
+    volumes:
+      - ${DATA_ROOT}/config/vpn-slskd:/gluetun
+      - vpn_sync:/vpn-sync
+    ports:
+      - "${SLSKD_PORT:-8585}:${SLSKD_PORT:-8585}"
+      - "${GLUETUN_SLSKD_API_PORT:-8001}:8000"
+    networks:
+      - vpn_slskd
+      - frontend
+
+  # --------------------------------------------------------------------------
+  # DOWNLOAD CLIENTS
+  # --------------------------------------------------------------------------
+  qbittorrent:
+    <<: *restart-policy
+    image: linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: service:vpn-torrents
+    depends_on:
+      vpn-torrents:
+        condition: service_started
+      init-permissions:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
+    volumes:
+      - ${DATA_ROOT}/config/qbittorrent:/config
+      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media:/media
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  slskd:
+    <<: *restart-policy
+    image: slskd/slskd:latest
+    container_name: slskd
+    user: "${PUID:-1000}:${PGID:-1000}"
+    network_mode: service:vpn-slskd
+    depends_on:
+      vpn-slskd:
+        condition: service_started
+      init-permissions:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      SLSKD_PORT: ${SLSKD_PORT:-8585}
+      ASPNETCORE_URLS: http://0.0.0.0:${SLSKD_PORT:-8585}
+    volumes:
+      - ${DATA_ROOT}/config/slskd:/app
+      - ${DATA_ROOT}/:/data
+      - ${DATA_ROOT}/media/music:/music
+      - vpn_sync:/vpn-sync:ro
+      - ./scripts/slskd-wrapper.sh:/wrapper.sh:ro
+    entrypoint: ["/bin/sh", "/wrapper.sh"]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # --------------------------------------------------------------------------
+  # MEDIA MANAGEMENT (*arr stack)
+  # --------------------------------------------------------------------------
+  sonarr:
+    <<: *arr-base
+    image: linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      <<: *common-env
+      INTERNAL_PORT: 8989
+    volumes:
+      - ${DATA_ROOT}/config/sonarr:/config
+      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/tv:/tv
+    ports:
+      - "${SONARR_PORT:-8181}:8989"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  radarr:
+    <<: *arr-base
+    image: linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      <<: *common-env
+      INTERNAL_PORT: 7878
+    volumes:
+      - ${DATA_ROOT}/config/radarr:/config
+      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/movies:/movies
+    ports:
+      - "${RADARR_PORT:-8282}:7878"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  lidarr:
+    <<: *arr-base
+    image: linuxserver/lidarr:2.14.1-nightly
+    container_name: lidarr
+    environment:
+      <<: *common-env
+      INTERNAL_PORT: 8686
+    volumes:
+      - ${DATA_ROOT}/config/lidarr:/config
+      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/music:/music
+    ports:
+      - "${LIDARR_PORT:-8383}:8686"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  readarr:
+    <<: *arr-base
+    image: linuxserver/readarr:${READARR_VERSION:-nightly}
+    container_name: readarr
+    environment:
+      <<: *common-env
+      INTERNAL_PORT: 8787
+    volumes:
+      - ${DATA_ROOT}/config/readarr:/config
+      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/books:/books
+    ports:
+      - "${READARR_PORT:-8484}:8787"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  # --------------------------------------------------------------------------
+  # INDEXERS & HELPERS
+  # --------------------------------------------------------------------------
+  prowlarr:
+    <<: *arr-base
+    image: linuxserver/prowlarr:${PROWLARR_VERSION:-develop}
+    container_name: prowlarr
+    environment:
+      <<: *common-env
+      INTERNAL_PORT: 9696
+    volumes:
+      - ${DATA_ROOT}/config/prowlarr:/config
+    ports:
+      - "${PROWLARR_PORT:-9696}:9696"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  # --------------------------------------------------------------------------
+  # MEDIA SERVERS
+  # --------------------------------------------------------------------------
+  navidrome:
+    <<: *restart-policy
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    networks:
+      - frontend
+    environment:
+      <<: *common-env
+      ND_SCANSCHEDULE: 1h
+      ND_LOGLEVEL: info
+      ND_BASEURL: /music
+      ND_ENABLETRANSCODINGCONFIG: true
+      ND_ENABLESHARING: true
+    volumes:
+      - ${DATA_ROOT}/config/navidrome:/data
+      - ${DATA_ROOT}/media/music:/music:ro
+    ports:
+      - "${NAVIDROME_PORT:-8686}:4533"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4533"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  # --------------------------------------------------------------------------
+  # OPTIONAL: Media Server Alternative (Jellyfin)
+  # --------------------------------------------------------------------------
+  # jellyfin:
+  #   <<: *restart-policy
+  #   image: jellyfin/jellyfin:latest
+  #   container_name: jellyfin
+  #   networks:
+  #     - frontend
+  #   environment:
+  #     <<: *common-env
+  #   volumes:
+  #     - ${DATA_ROOT}/config/jellyfin:/config
+  #     - ${DATA_ROOT}/media:/media:ro
+  #   ports:
+  #     - "${JELLYFIN_PORT:-8096}:8096"
+  #     - "${JELLYFIN_DISCOVERY_PORT:-7359}:7359/udp"
+  #   devices:
+  #     - /dev/dri:/dev/dri  # For hardware acceleration
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 4G
+  #       reservations:
+  #         memory: 1G
