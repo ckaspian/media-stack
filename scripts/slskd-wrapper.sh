@@ -31,19 +31,19 @@ readonly NC='\033[0m' # No Color
 # ============================================================================
 
 log_info() {
-    echo -e "${BLUE}${SCRIPT_NAME}${NC} ${1}"
+    echo "${BLUE}${SCRIPT_NAME}${NC} ${1}"
 }
 
 log_success() {
-    echo -e "${GREEN}${SCRIPT_NAME}${NC} ✅ ${1}"
+    echo "${GREEN}${SCRIPT_NAME}${NC} ✅ ${1}"
 }
 
 log_warning() {
-    echo -e "${YELLOW}${SCRIPT_NAME}${NC} ⚠️  ${1}"
+    echo "${YELLOW}${SCRIPT_NAME}${NC} ⚠️  ${1}"
 }
 
 log_error() {
-    echo -e "${RED}${SCRIPT_NAME}${NC} ❌ ${1}" >&2
+    echo "${RED}${SCRIPT_NAME}${NC} ❌ ${1}" >&2
 }
 
 # Graceful shutdown handler
