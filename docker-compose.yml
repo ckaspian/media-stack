@@ -166,8 +166,7 @@ services:
       WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
     volumes:
       - ${DATA_ROOT}/config/qbittorrent:/config
-      - ${DATA_ROOT}/downloads:/downloads
-      - ${DATA_ROOT}/media:/media
+      - ${DATA_ROOT}/:/data
     deploy:
       resources:
         limits:
@@ -243,7 +242,7 @@ services:
 
   lidarr:
     <<: *arr-base
-    image: linuxserver/lidarr:2.14.1-nightly
+    image: linuxserver/lidarr:${LIDARR_VERSION:-nightly}
     container_name: lidarr
     environment:
       <<: *common-env
@@ -271,6 +270,25 @@ services:
       - ${DATA_ROOT}/media/books:/books
     ports:
       - "${READARR_PORT:-8484}:8787"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=false"
+
+  picard:
+    <<: *restart-policy
+    image: mikenye/picard:${PICARD_VERSION:-2.13.3}
+    container_name: picard
+    networks:
+      - media_network
+      - frontend
+    environment:
+      <<: *common-env
+    volumes:
+      - ${DATA_ROOT}/config/picard:/config
+      - ${DATA_ROOT}/media/music:/music
+      - ${DATA_ROOT}/media/downloads:/downloads
+    ports:
+      - "${PICARD_PORT:-8787}:3000"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
       - "traefik.enable=false"
@@ -353,3 +371,16 @@ services:
   #         memory: 4G
   #       reservations:
   #         memory: 1G
+
+  # --------------------------------------------------------------------------
+  # REMOTE ACCESS
+  # --------------------------------------------------------------------------
+  cloudflared-navidrome:
+    <<: *restart-policy
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-navidrome
+    networks:
+      - frontend
+    depends_on:
+      - navidrome
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
