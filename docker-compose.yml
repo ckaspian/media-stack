@@ -189,6 +189,7 @@ services:
       <<: *common-env
       SLSKD_PORT: ${SLSKD_PORT:-8585}
       ASPNETCORE_URLS: http://0.0.0.0:${SLSKD_PORT:-8585}
+      SLSKD_REMOTE_CONFIGURATION: true
     volumes:
       - ${DATA_ROOT}/config/slskd:/app
       - ${DATA_ROOT}/:/data
@@ -215,7 +216,7 @@ services:
       INTERNAL_PORT: 8989
     volumes:
       - ${DATA_ROOT}/config/sonarr:/config
-      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/downloads:/downloads
       - ${DATA_ROOT}/media/tv:/tv
     ports:
       - "${SONARR_PORT:-8181}:8989"
@@ -232,7 +233,7 @@ services:
       INTERNAL_PORT: 7878
     volumes:
       - ${DATA_ROOT}/config/radarr:/config
-      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/downloads:/downloads
       - ${DATA_ROOT}/media/movies:/movies
     ports:
       - "${RADARR_PORT:-8282}:7878"
@@ -249,7 +250,7 @@ services:
       INTERNAL_PORT: 8686
     volumes:
       - ${DATA_ROOT}/config/lidarr:/config
-      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/downloads:/downloads
       - ${DATA_ROOT}/media/music:/music
     ports:
       - "${LIDARR_PORT:-8383}:8686"
@@ -266,7 +267,7 @@ services:
       INTERNAL_PORT: 8787
     volumes:
       - ${DATA_ROOT}/config/readarr:/config
-      - ${DATA_ROOT}/downloads:/downloads
+      - ${DATA_ROOT}/media/downloads:/downloads
       - ${DATA_ROOT}/media/books:/books
     ports:
       - "${READARR_PORT:-8484}:8787"
@@ -288,7 +289,7 @@ services:
       - ${DATA_ROOT}/media/music:/music
       - ${DATA_ROOT}/media/downloads:/downloads
     ports:
-      - "${PICARD_PORT:-8787}:3000"
+      - "${PICARD_PORT:-8787}:5800"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
       - "traefik.enable=false"
