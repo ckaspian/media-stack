@@ -56,7 +56,7 @@ mkdir -p ~/media-stack
 cd ~/media-stack
 
 # Create the required directory structure
-mkdir -p scripts data/{config,downloads,media/{tv,movies,music,books}}
+mkdir -p scripts data/{config,downloads/music,media/{tv,movies,music,books}}
 
 # Download/copy the following files into ~/media-stack:
 # - docker-compose.yml
@@ -124,7 +124,10 @@ Prowlarr Server: http://prowlarr:9696
 
 Sonarr Server: http://sonarr:8989 (use the internal container port).
 
-Repeat for Radarr, Lidarr, and Readarr using their respective service names and internal ports.
+Repeat for Radarr, Lidarr, and Readarr using their respective service names and internal ports:
+- Radarr: http://radarr:7878
+- Lidarr: http://lidarr:8686
+- Readarr: http://readarr:8787
 
 Configure Media Paths
 All *arr applications and Picard should be configured with these container paths:
