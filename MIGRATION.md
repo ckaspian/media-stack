@@ -34,9 +34,8 @@
 │   ├── vpn-torrents/         # Renamed
 │   ├── vpn-slskd/            # Renamed
 │   └── prowlarr/             # New addition
-├── downloads/                # Separated from data root
-│   └── music/               # For slskd
 └── media/
+    ├── downloads/            # Moved under media
     ├── tv/                   # Organized by type
     ├── movies/
     ├── music/
@@ -56,10 +55,11 @@ GLUETUN_TORRENTS_API_PORT=8000
 GLUETUN_SLSKD_API_PORT=8001
 PROWLARR_PORT=9696
 
-# Version specifications
-READARR_VERSION=0.4.19-nightly
-LIDARR_VERSION=2.14.1-nightly
-PROWLARR_VERSION=2.1.0-develop
+# Version specifications (with defaults from docker-compose.yml)
+READARR_VERSION=0.4.19-nightly  # default: nightly
+LIDARR_VERSION=2.14.1-nightly   # default: nightly
+PROWLARR_VERSION=2.1.0-develop  # default: develop
+PICARD_VERSION=2.13.3           # default: 2.13.3
 ```
 
 ## 🚀 Step-by-Step Migration
@@ -85,7 +85,7 @@ docker volume ls | grep -E "(gluetun|qbit|sonarr|radarr|lidarr|readarr|navidrome
 ### Step 2: Prepare New Structure
 ```bash
 # Create new directory structure
-mkdir -p data/{downloads/music,media/{tv,movies,music,books}}
+mkdir -p data/media/{downloads,tv,movies,music,books}
 mkdir -p scripts
 
 # Copy wrapper script
@@ -173,6 +173,7 @@ Open in browser:
 - Prowlarr: http://localhost:9696
 - Navidrome: http://localhost:8686
 - Slskd: http://localhost:8585
+- Picard: http://localhost:8586
 
 ### 4. Check Inter-Service Communication
 In Sonarr/Radarr settings:

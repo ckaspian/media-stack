@@ -32,9 +32,9 @@ The .env file is logically grouped with detailed documentation for all required 
 | slskd | Soulseek Client | 8585 | ✅ | latest |
 | Sonarr | TV Show Management | 8181 | ❌ | latest |
 | Radarr | Movie Management | 8282 | ❌ | latest |
-| Lidarr | Music Management | 8383 | ❌ | 2.14.1-nightly |
-| Readarr | Book Management | 8484 | ❌ | 0.4.19-nightly |
-| Prowlarr | Indexer Management | 9696 | ❌ | 2.1.0-develop |
+| Lidarr | Music Management | 8383 | ❌ | nightly |
+| Readarr | Book Management | 8484 | ❌ | nightly |
+| Prowlarr | Indexer Management | 9696 | ❌ | develop |
 | Picard | Music Tagger | 8586 | ❌ | 2.13.3 |
 | Navidrome | Music Streaming | 8686 | ❌ | latest |
 | Cloudflared | Remote Access Tunnel | N/A | ❌ | latest |
@@ -56,7 +56,7 @@ mkdir -p ~/media-stack
 cd ~/media-stack
 
 # Create the required directory structure
-mkdir -p scripts data/{config,downloads,media/{tv,movies,music,books}}
+mkdir -p scripts data/{config,media/{downloads,tv,movies,music,books}}
 
 # Download/copy the following files into ~/media-stack:
 # - docker-compose.yml
