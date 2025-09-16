@@ -1,162 +1,162 @@
-Media Stack - Modernized Docker Compose Setup
-A fully automated media server stack with VPN-protected downloading, automated content management, and secure remote streaming capabilities.
+# Media Stack — Modernized Docker Compose Setup
 
-🎯 Key Improvements Made
-1. Organization & Structure
-Clear sectioning with visual separators and logical grouping of services.
+A fully automated media server stack with VPN-protected downloading, automated content management, and secure remote streaming.
 
-Comprehensive comments and consistent naming conventions (kebab-case for containers).
+## Key improvements (what this stack aims to provide)
 
-2. Reduced Redundancy with YAML Anchors
-Common configurations like user IDs, timezone, and restart policies are defined once and reused everywhere, making the stack easier to maintain.
+- Organization & structure with clear sections and consistent naming (kebab-case for containers).
+- Reduced redundancy using YAML anchors for shared config (UIDs, timezone, restart policy).
+- Health checks to ensure services are running properly.
+- Resource limits to prevent runaway containers.
+- Network isolation for security and clean service separation.
+- Startup dependencies (e.g., download clients wait until VPN is up).
+- Labels ready for integrations like Watchtower (auto-updates) and Traefik (reverse proxy).
+- Improved scripting (e.g., slskd wrapper with better error handling, logging, and clean shutdown).
+- Well-documented `.env` with required and optional settings.
 
-3. Enhanced Features
-✅ Health Checks: Automatically monitor if services are running correctly.
+## Stack components
 
-✅ Resource Limits: Prevent runaway containers from crashing your server.
+| Service    | Purpose                | Host Port | VPN Protected | Tag      |
+|------------|------------------------|----------:|:-------------:|----------|
+| qBittorrent | Torrent client         | 8080      | ✅            | latest   |
+| slskd      | Soulseek client        | 8585      | ✅            | latest   |
+| Sonarr     | TV show management     | 8181      | ❌            | latest   |
+| Radarr     | Movie management       | 8282      | ❌            | latest   |
+| Lidarr     | Music management       | 8383      | ❌            | nightly  |
+| Readarr    | Book management        | 8484      | ❌            | nightly  |
+| Prowlarr   | Indexer management     | 9696      | ❌            | develop  |
+| Picard     | Music tagger           | 8586      | ❌            | 2.13.3   |
+| Navidrome  | Music streaming        | 8686      | ❌            | latest   |
+| Cloudflared | Remote access tunnel  | N/A       | ❌            | latest   |
 
-✅ Network Isolation: Services are separated into logical networks for enhanced security.
+Note: "Host Port" is the port on your machine. Many apps use different internal container ports (e.g., Sonarr uses 8989 internally).
 
-✅ Dependency Management: Ensures services like download clients start only after their VPN is ready.
+## Quick start
 
-✅ Labels for Integrations: Ready for optional tools like Watchtower (auto-updates) and Traefik (reverse proxy).
+### 1) Prerequisites
 
-4. Improved Scripting & Configuration
-The slskd wrapper script now includes better error handling, logging, and signal trapping for clean shutdowns.
+```bash
+# Install Docker and Docker Compose Plugin
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"
 
-The .env file is logically grouped with detailed documentation for all required and optional settings.
-
-📦 Stack Components
-| Service | Purpose | Port | VPN Protected | Version |
-| qBittorrent | Torrent Client | 8080 | ✅ | latest |
-| slskd | Soulseek Client | 8585 | ✅ | latest |
-| Sonarr | TV Show Management | 8181 | ❌ | latest |
-| Radarr | Movie Management | 8282 | ❌ | latest |
-| Lidarr | Music Management | 8383 | ❌ | nightly |
-| Readarr | Book Management | 8484 | ❌ | nightly |
-| Prowlarr | Indexer Management | 9696 | ❌ | develop |
-| Picard | Music Tagger | 8586 | ❌ | 2.13.3 |
-| Navidrome | Music Streaming | 8686 | ❌ | latest |
-| Cloudflared | Remote Access Tunnel | N/A | ❌ | latest |
-
-🚀 Quick Start
-1. Prerequisites
-# Install Docker and Docker Compose
-curl -fsSL [https://get.docker.com](https://get.docker.com) | sh
-sudo usermod -aG docker $USER
-
-# Log out and log back in for the group change to take effect.
-# Then, get your user/group IDs for the .env file.
+# Log out and back in for the new group to take effect.
+# Then get your user/group IDs for the .env file:
 id
+```
 
+### 2) Set up the project
 
-2. Configuration
-# Clone or create the stack directory
+```bash
+# Create the stack directory
 mkdir -p ~/media-stack
 cd ~/media-stack
 
-# Create the required directory structure
+# Create directories
 mkdir -p scripts data/{config,media/{downloads,tv,movies,music,books}}
 
-# Download/copy the following files into ~/media-stack:
+# Place these files in ~/media-stack:
 # - docker-compose.yml
 # - example.env
 # - scripts/slskd-wrapper.sh
 
-# Make the wrapper script executable
+# Make the wrapper executable
 chmod +x scripts/slskd-wrapper.sh
 
-# Create your .env file from the example
+# Create your .env
 cp example.env .env
 
-# Edit the .env file with your specific values
+# Edit your .env with correct values
 nano .env
 # IMPORTANT: Update DATA_ROOT, PUID, PGID, and your VPN keys.
-# OPTIONAL: Update the CLOUDFLARE_TUNNEL_TOKEN if you want remote access.
+# OPTIONAL: Set CLOUDFLARE_TUNNEL_TOKEN for remote access via Cloudflare Tunnel.
+```
 
+### 3) VPN setup
 
-3. VPN Setup
-Get a WireGuard configuration from your VPN provider (e.g., ProtonVPN, Mullvad).
+Obtain a WireGuard configuration from your VPN provider (e.g., ProtonVPN, Mullvad). Extract the private keys you'll use for the containers protected by VPN and add them to `.env`:
 
-Extract the private key for each VPN connection you need.
-
-Paste the keys into the .env file:
-
+```env
 TORRENT_WIREGUARD_PRIVATE_KEY="your_key_for_torrents_goes_here"
 SLSKD_WIREGUARD_PRIVATE_KEY="your_key_for_slskd_goes_here"
+```
 
+### 4) Launch the stack
 
-4. Launch the Stack
-# Start all services in the background
+```bash
+# Start all services
 docker compose up -d
 
-# Check the status of all containers
+# See status
 docker compose ps
 
-# View the logs of all running services
+# Tail all logs
 docker compose logs -f
 
-# To view logs for a specific service (e.g., vpn-torrents)
+# Tail a specific service (example: vpn-torrents)
 docker compose logs -f vpn-torrents
 
-# Stop and remove all services
+# Stop and remove services
 docker compose down
+```
 
+## Configuration
 
-🔧 Service Configuration
-Connect Sonarr to qBittorrent
-Open Sonarr: http://localhost:8181
+### Connect Sonarr to qBittorrent
 
-Go to Settings → Download Clients → Add (+) → qBittorrent.
+- Open Sonarr: http://localhost:8181
+- Go to Settings → Download Clients → Add (+) → qBittorrent
+  - Host: vpn-torrents (Docker service name)
+  - Port: 8080
 
-Host: vpn-torrents (this is the Docker service name, not localhost).
+### Add indexers via Prowlarr
 
-Port: 8080.
+- Open Prowlarr: http://localhost:9696
+- Add your indexers
+- Go to Settings → Apps → Add Application (+) → Sonarr
+  - Prowlarr Server: http://prowlarr:9696
+  - Sonarr Server: http://sonarr:8989 (use internal container port)
+- Repeat for Radarr, Lidarr, and Readarr with their service names and internal ports.
 
-Add Indexers via Prowlarr
-Open Prowlarr: http://localhost:9696
+### Media paths
 
-Add your indexers.
+Configure the same container paths across your apps:
 
-Go to Settings → Apps → Add Application (+) and select Sonarr.
+- Downloads: `/downloads`
+- Media: `/tv`, `/movies`, `/music`, `/books`
 
-Prowlarr Server: http://prowlarr:9696
+## Security and remote access
 
-Sonarr Server: http://sonarr:8989 (use the internal container port).
+### Network isolation
 
-Repeat for Radarr, Lidarr, and Readarr using their respective service names and internal ports.
+The stack uses multiple Docker networks to restrict communication:
+- A VPN network (e.g., `vpn_torrents`) isolates traffic for qBittorrent and slskd.
+- A media network links the *arr services, indexers, and supporting apps as needed.
+This reduces blast radius and enforces least privilege between services.
 
-Configure Media Paths
-All *arr applications and Picard should be configured with these container paths:
+### Cloudflare Tunnel (optional)
 
-Root/Downloads Path: /downloads
+Use Cloudflare Tunnel to expose services (e.g., Navidrome) without opening router ports:
 
-Media Paths: /tv, /movies, /music, /books respectively.
+1. Create a tunnel and obtain a token from Cloudflare Zero Trust dashboard.
+2. Add the token to `CLOUDFLARE_TUNNEL_TOKEN` in `.env`.
+3. In Cloudflare, point your hostname (e.g., `music.yourdomain.com`) to `http://navidrome:4533`.
+4. Start the stack. The `cloudflared-navidrome` service will connect automatically.
 
-🛡️ Security & Remote Access
-Network Isolation
-The stack uses multiple isolated Docker networks to ensure services can only communicate with what they need to. For example, the vpn_torrents network isolates qBittorrent's traffic, while the media_network is used for internal communication between the *arr apps.
+## Monitoring and maintenance
 
-Cloudflare Tunnel for Secure Remote Access
-Instead of opening ports on your router, you can use the built-in Cloudflare Tunnel to securely expose services like Navidrome.
+### Health checks
 
-Get a tunnel token from the Cloudflare Zero Trust dashboard.
+Critical services include health checks. Use `docker compose ps` to verify status. A status of `healthy` indicates the service is functioning.
 
-Add the token to CLOUDFLARE_TUNNEL_TOKEN in your .env file.
+### Backups
 
-In the Cloudflare dashboard, point your desired hostname (e.g., music.yourdomain.com) to the service http://navidrome:4533.
+Back up the `data/config` directory regularly. Example script:
 
-Start the stack. The cloudflared-navidrome service will automatically connect to Cloudflare.
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-📊 Monitoring & Maintenance
-Health Checks
-All critical services include a health check to verify they are operational. You can see the status by running docker compose ps. A status of healthy indicates the service is running correctly.
-
-Backup Strategy
-It's crucial to back up your configuration volumes. A simple strategy is to stop the stack and create a compressed archive of the data/config directory.
-
-# Example backup script
-#!/bin/bash
 BACKUP_DIR="/path/to/backups/media-stack-$(date +%Y%m%d)"
 mkdir -p "$BACKUP_DIR"
 cd ~/media-stack
@@ -169,34 +169,47 @@ tar -czf "$BACKUP_DIR/configs.tar.gz" data/config/
 
 echo "Restarting services..."
 docker compose up -d
+```
 
+## Troubleshooting
 
-🔍 Troubleshooting
-Port Conflicts
-If a port is already in use on your host, you'll see an error on startup.
+### Port conflicts
 
-# Find out which process is using a port (e.g., 8080)
+If a host port is in use:
+
+```bash
+# Find the process using a port (example: 8080)
 sudo lsof -i :8080
+```
 
-# Change the conflicting port in your .env file
-QBITTORRENT_WEBUI_PORT=8081 # Change to an unused port
+Change the conflicting port in `.env`, for example:
 
+```env
+QBITTORRENT_WEBUI_PORT=8081
+```
 
-After changing the port, restart the stack with docker compose up -d.
+Then restart:
 
-Permission Issues
-If you see "Permission Denied" errors in the logs, it's likely a file ownership issue inside the containers.
+```bash
+docker compose up -d
+```
 
-# The stack includes a one-off service to fix this.
+### Permission issues
+
+"Permission denied" usually indicates UID/GID mismatches. You can use the provided one-off service:
+
+```bash
 docker compose run --rm init-permissions
+```
 
-# Alternatively, fix it manually from your host
-sudo chown -R 1000:1000 data/ # Replace 1000:1000 with your PUID:PGID
+Or fix from the host:
 
+```bash
+sudo chown -R 1000:1000 data/  # Replace 1000:1000 with your PUID:PGID
+```
 
-📚 Resources
-Docker Compose Documentation
+## Resources
 
-Gluetun Wiki
-
-TRaSH Guides - Best practices for *arr setup.
+- Docker Compose documentation: https://docs.docker.com/compose/
+- Gluetun wiki: https://github.com/qdm12/gluetun/wiki
+- TRaSH Guides (*arr best practices): https://trash-guides.info/
